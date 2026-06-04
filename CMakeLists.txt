@@ -5,11 +5,19 @@ if(POLICY CMP0177)
     cmake_policy(SET CMP0177 NEW)
 endif()
 
-project(EasyTierConnector VERSION 0.9.0 LANGUAGES CXX)
-set(ET_VERSION "2.6.3")
-
-# 社区版/专业版 条件编译开关（默认构建专业版）
+# 社区版/专业版 条件编译开关
 set(IS_COMMUNITY_VER OFF CACHE BOOL "Build community version (OFF for Pro)")
+
+# 项目名称
+if(IS_COMMUNITY_VER)
+    project(EasyTierConnector LANGUAGES CXX)
+else()
+    project(EasyTierPro LANGUAGES CXX)
+endif()
+
+# 项目版本
+set(PROJECT_VERSION "0.9.0")
+set(ET_VERSION "2.6.3")
 
 # 设置默认安装目录为项目根目录的Install文件夹
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/Install" CACHE PATH "Installation directory" FORCE)

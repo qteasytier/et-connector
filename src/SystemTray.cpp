@@ -195,23 +195,11 @@ void SystemTray::setupMenu()
     m_separator3 = m_menu->addSeparator();
     
     // 开机自启
-    m_autoStartAction = new QAction(
-#ifdef IS_COMMUNITY_VER
-        "开机启动托盘",
-#else
-        "开机后自动连接",
-#endif
-        this);
+    m_autoStartAction = new QAction("开机启动托盘程序", this);
     m_autoStartAction->setIcon(QIcon(":/assets/startup.svg"));
     m_autoStartAction->setCheckable(true);
     m_autoStartAction->setChecked(m_autoStart);
-    m_autoStartAction->setToolTip(
-#ifdef IS_COMMUNITY_VER
-        "设置托盘程序开机自启"
-#else
-        "开机后自动连接 EasyTier Pro"
-#endif
-    );
+    m_autoStartAction->setToolTip("开机后启动托盘程序，EasyTier Pro 会自动连接");
     connect(m_autoStartAction, &QAction::toggled, this, &SystemTray::onAutoStart);
     m_menu->addAction(m_autoStartAction);
 
@@ -231,13 +219,7 @@ void SystemTray::setupMenu()
 #endif
     
     // 退出
-    m_quitAction = new QAction(QIcon(":/assets/quit.svg"),
-#ifdef IS_COMMUNITY_VER
-                               "退出托盘程序",
-#else
-                               "退出客户端",
-#endif
-                               this);
+    m_quitAction = new QAction(QIcon(":/assets/quit.svg"), "退出客户端", this);
     connect(m_quitAction, &QAction::triggered, this, &SystemTray::onQuit);
     m_menu->addAction(m_quitAction);
 }
