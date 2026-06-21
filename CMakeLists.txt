@@ -5,18 +5,11 @@ if(POLICY CMP0177)
     cmake_policy(SET CMP0177 NEW)
 endif()
 
-# 社区版/专业版 条件编译开关
-set(IS_COMMUNITY_VER OFF CACHE BOOL "Build community version (OFF for Pro)")
-
 # 项目名称
-if(IS_COMMUNITY_VER)
-    project(EasyTierConnector LANGUAGES CXX)
-else()
-    project(EasyTierPro LANGUAGES CXX)
-endif()
+project(EasyTierConnector LANGUAGES CXX)
 
 # 项目版本
-set(PROJECT_VERSION "0.9.0")
+set(PROJECT_VERSION "1.0.0")
 set(ET_VERSION "2.6.3")
 
 # 设置默认安装目录为项目根目录的Install文件夹
@@ -52,20 +45,6 @@ set(HEADERS
     src/ConfigManager.h
 )
 
-# 专业版专用源文件
-if(NOT IS_COMMUNITY_VER)
-    list(APPEND SOURCES
-        src/CasdoorLogin.cpp
-        src/DevicesDialog.cpp
-        src/DiagnosticsDialog.cpp
-    )
-    list(APPEND HEADERS
-        src/CasdoorLogin.h
-        src/DevicesDialog.h
-        src/DiagnosticsDialog.h
-    )
-endif()
-
 # 资源文件
 set(RESOURCES
     resources.qrc
@@ -87,14 +66,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Svg
 )
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${PROJECT_VERSION}" ET_VERSION="${ET_VERSION}")
-
-# 社区版/专业版 条件编译定义
-if(IS_COMMUNITY_VER)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE IS_COMMUNITY_VER FAVICON_SVG=":/favicon/favicon-open.svg" APP_DISPLAY_NAME="ET Connector")
-else()
-    target_compile_definitions(${PROJECT_NAME} PRIVATE FAVICON_SVG=":/favicon/favicon.svg" APP_DISPLAY_NAME="EasyTier Pro")
-endif()
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    APP_VERSION="${PROJECT_VERSION}"
+    ET_VERSION="${ET_VERSION}"
+    IS_COMMUNITY_VER
+    FAVICON_SVG=":/favicon/favicon-open.svg"
+    APP_DISPLAY_NAME="ET Connector"
+)
 
 # Windows特定设置
 if(WIN32)
@@ -104,11 +82,7 @@ if(WIN32)
 
     # 生成 RC 文件引入 manifest 和图标
     set(APP_MANIFEST "${CMAKE_SOURCE_DIR}/app.manifest")
-    if(IS_COMMUNITY_VER)
-        set(APP_ICON "${CMAKE_SOURCE_DIR}/favicon/favicon-open.ico")
-    else()
-        set(APP_ICON "${CMAKE_SOURCE_DIR}/favicon/favicon.ico")
-    endif()
+    set(APP_ICON "${CMAKE_SOURCE_DIR}/favicon/favicon-open.ico")
     set(APP_RC "${CMAKE_BINARY_DIR}/app.rc")
 
     # 检查图标文件是否存在
@@ -134,13 +108,8 @@ endif()
 
 # macOS Bundle 配置
 if(APPLE)
-    if(IS_COMMUNITY_VER)
-        set(MACOS_ICON_FILE "favicon-open")
-        set(MACOS_ICON_PATH "${CMAKE_SOURCE_DIR}/favicon/favicon-open.icns")
-    else()
-        set(MACOS_ICON_FILE "favicon")
-        set(MACOS_ICON_PATH "${CMAKE_SOURCE_DIR}/favicon/favicon.icns")
-    endif()
+    set(MACOS_ICON_FILE "favicon-open")
+    set(MACOS_ICON_PATH "${CMAKE_SOURCE_DIR}/favicon/favicon-open.icns")
 
     set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE

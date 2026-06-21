@@ -35,20 +35,12 @@ public:
     QString getConnectionKey() const { return m_connectionKey; }
     bool getAutoStart() const { return m_autoStart; }
     QString getConfigFilePath() const { return m_configFilePath; }
-    QString getUserId() const { return m_userId; }
-    QString getUserDisplayName() const { return m_userDisplayName; }
-    QString getOAuthDeviceKey() const { return m_oauthDeviceKey; }
-    QString getTenantDisplayName() const { return m_tenantDisplayName; }
     bool getRememberQuitChoice() const { return m_rememberQuitChoice; }
     bool getStopOnQuit() const { return m_stopOnQuit; }
 
     // 设置配置
     void setConnectionKey(const QString &key) { m_connectionKey = key; }
     void setAutoStart(bool autoStart) { m_autoStart = autoStart; }
-    void setUserId(const QString &id) { m_userId = id; }
-    void setUserDisplayName(const QString &name) { m_userDisplayName = name; }
-    void setOAuthDeviceKey(const QString &key) { m_oauthDeviceKey = key; }
-    void setTenantDisplayName(const QString &name) { m_tenantDisplayName = name; }
     void setRememberQuitChoice(bool remember) { m_rememberQuitChoice = remember; }
     void setStopOnQuit(bool stop) { m_stopOnQuit = stop; }
     
@@ -73,10 +65,6 @@ private:
     // 配置数据
     QString m_connectionKey;       ///< 连接密钥
     bool m_autoStart = false;      ///< 是否开机启动托盘程序
-    QString m_userId;              ///< OAuth用户ID
-    QString m_userDisplayName;     ///< OAuth用户显示名称
-    QString m_oauthDeviceKey;      ///< OAuth登录获取的设备密钥（不含前缀）
-    QString m_tenantDisplayName;   ///< OAuth登录获取的组织显示名称
     bool m_rememberQuitChoice = false; ///< 是否记住退出时是否停止EasyTier的选择
     bool m_stopOnQuit = true;          ///< 记住的选择：退出时是否停止EasyTier（默认停止）
     

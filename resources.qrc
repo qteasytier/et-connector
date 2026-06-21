@@ -3,22 +3,16 @@
     <qresource prefix="/">
         <file>assets/autoconnect.svg</file>
         <file>assets/startup.svg</file>
-        <file>favicon/favicon.svg</file>
         <file>favicon/favicon-open.svg</file>
         <file>assets/status-red.svg</file>
         <file>assets/status-yellow.svg</file>
         <file>assets/status-green.svg</file>
         <file>assets/connect.svg</file>
         <file>assets/disconnect.svg</file>
-        <file>assets/webconsole.svg</file>
-        <file>assets/login.svg</file>
         <file>assets/settings.svg</file>
         <file>assets/about.svg</file>
         <file>assets/quit.svg</file>
-        <file>assets/user.svg</file>
-        <file>assets/user-loggedin.svg</file>
         <file>assets/user-opensource.svg</file>
         <file>assets/clear.svg</file>
-        <file>assets/tenant.svg</file>
     </qresource>
 </RCC>

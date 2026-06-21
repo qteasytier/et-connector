@@ -26,51 +26,28 @@ jobs:
 
       - name: 提取版本号
         run: |
-          VERSION=$(grep 'project(EasyTierConnector VERSION' CMakeLists.txt | sed -n 's/.*VERSION \([0-9.]*\).*/\1/p')
+          VERSION=$(grep 'set(PROJECT_VERSION' CMakeLists.txt | sed -n 's/.*"\([0-9.]*\)".*/\1/p')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      # === 社区版 ===
-      - name: 清理旧构建 (社区版)
+      - name: 清理旧构建
         run: rm -rf build Install
 
-      - name: Configure (社区版)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ runner.temp }}/Qt/6.10.3/gcc_64" -DIS_COMMUNITY_VER=ON
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ runner.temp }}/Qt/6.10.3/gcc_64"
 
-      - name: Build (社区版)
+      - name: Build
         run: cmake --build build --parallel $(nproc)
 
-      - name: Install (社区版)
+      - name: Install
         run: cmake --install build
 
-      - name: 打包 DEB (社区版)
+      - name: 打包 DEB
         run: bash package/linux/deb/build_deb.sh --version ${{ env.VERSION }}
 
-      - name: 上传 DEB 包 (社区版)
+      - name: 上传 DEB 包
         uses: actions/upload-artifact@v5
         with:
-          name: EasyTierConnector-Community-linux-amd64
-          path: Install/*.deb
-
-      # === 专业版 ===
-      - name: 清理旧构建 (专业版)
-        run: rm -rf build Install
-
-      - name: Configure (专业版)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ runner.temp }}/Qt/6.10.3/gcc_64" -DIS_COMMUNITY_VER=OFF
-
-      - name: Build (专业版)
-        run: cmake --build build --parallel $(nproc)
-
-      - name: Install (专业版)
-        run: cmake --install build
-
-      - name: 打包 DEB (专业版)
-        run: bash package/linux/deb/build_deb.sh --version ${{ env.VERSION }} --pro
-
-      - name: 上传 DEB 包 (专业版)
-        uses: actions/upload-artifact@v5
-        with:
-          name: EasyTierConnector-Pro-linux-amd64
+          name: EasyTierConnector-linux-amd64
           path: Install/*.deb
 
   build-windows:
@@ -122,7 +99,7 @@ jobs:
         shell: pwsh
         run: |
           $content = Get-Content CMakeLists.txt -Raw
-          if ($content -match 'project\(EasyTierConnector VERSION ([0-9.]+)') {
+          if ($content -match 'set\(PROJECT_VERSION\s+"([0-9.]+)"') {
             $version = $matches[1]
             Write-Host "版本号: $version"
             "VERSION=$version" >> $env:GITHUB_ENV
@@ -131,58 +108,30 @@ jobs:
             exit 1
           }
 
-      # === 社区版 ===
-      - name: 清理旧构建 (社区版)
+      - name: 清理旧构建
         shell: pwsh
         run: Remove-Item -Recurse -Force build, Install -ErrorAction SilentlyContinue
 
-      - name: Configure (社区版)
+      - name: Configure
         shell: bash
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR" -DIS_COMMUNITY_VER=ON -G "Ninja"
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR" -G "Ninja"
 
-      - name: Build (社区版)
+      - name: Build
         shell: bash
         run: cmake --build build --config Release
 
-      - name: Install (社区版)
+      - name: Install
         shell: bash
         run: cmake --install build --config Release
 
-      - name: 打包安装包 (社区版)
+      - name: 打包安装包
         shell: pwsh
         run: & ".\package\windows\build_win.ps1" --version $env:VERSION
 
-      - name: 上传安装包 (社区版)
+      - name: 上传安装包
         uses: actions/upload-artifact@v5
         with:
-          name: EasyTierConnector-Community-win-amd64
-          path: Install/*.exe
-
-      # === 专业版 ===
-      - name: 清理旧构建 (专业版)
-        shell: pwsh
-        run: Remove-Item -Recurse -Force build, Install -ErrorAction SilentlyContinue
-
-      - name: Configure (专业版)
-        shell: bash
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR" -DIS_COMMUNITY_VER=OFF -G "Ninja"
-
-      - name: Build (专业版)
-        shell: bash
-        run: cmake --build build --config Release
-
-      - name: Install (专业版)
-        shell: bash
-        run: cmake --install build --config Release
-
-      - name: 打包安装包 (专业版)
-        shell: pwsh
-        run: & ".\package\windows\build_win.ps1" --version $env:VERSION --pro
-
-      - name: 上传安装包 (专业版)
-        uses: actions/upload-artifact@v5
-        with:
-          name: EasyTierConnector-Pro-win-amd64
+          name: EasyTierConnector-win-amd64
           path: Install/*.exe
 
   build-macos:
@@ -208,46 +157,23 @@ jobs:
           target: 'desktop'
           arch: 'clang_64'
 
-      # === 社区版 ===
-      - name: 清理旧构建 (社区版)
+      - name: 清理旧构建
         run: rm -rf build Install
 
-      - name: Configure (社区版)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DIS_COMMUNITY_VER=ON
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build (社区版)
+      - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
 
-      - name: Install (社区版)
+      - name: Install
         run: cmake --install build
 
-      - name: Create DMG (社区版)
+      - name: Create DMG
         run: bash package/macos/build_dmg.sh
 
-      - name: 上传 DMG 包 (社区版)
+      - name: 上传 DMG 包
         uses: actions/upload-artifact@v5
         with:
-          name: EasyTierConnector-Community-mac-${{ matrix.arch }}
-          path: Install/*.dmg
-
-      # === 专业版 ===
-      - name: 清理旧构建 (专业版)
-        run: rm -rf build Install
-
-      - name: Configure (专业版)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DIS_COMMUNITY_VER=OFF
-
-      - name: Build (专业版)
-        run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
-
-      - name: Install (专业版)
-        run: cmake --install build
-
-      - name: Create DMG (专业版)
-        run: bash package/macos/build_dmg.sh --pro
-
-      - name: 上传 DMG 包 (专业版)
-        uses: actions/upload-artifact@v5
-        with:
-          name: EasyTierConnector-Pro-mac-${{ matrix.arch }}
+          name: EasyTierConnector-mac-${{ matrix.arch }}
           path: Install/*.dmg

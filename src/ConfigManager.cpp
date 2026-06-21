@@ -110,10 +110,6 @@ bool ConfigManager::saveConfig()
     QJsonObject configObj;
     configObj["connectionKey"] = m_connectionKey;
     configObj["autoStart"] = m_autoStart;
-    configObj["userId"] = m_userId;
-    configObj["userDisplayName"] = m_userDisplayName;
-    configObj["oauthDeviceKey"] = m_oauthDeviceKey;
-    configObj["tenantDisplayName"] = m_tenantDisplayName;
     configObj["rememberQuitChoice"] = m_rememberQuitChoice;
     configObj["stopOnQuit"] = m_stopOnQuit;
     
@@ -168,10 +164,6 @@ bool ConfigManager::loadConfig()
     // 安全读取配置项
     m_connectionKey = configObj["connectionKey"].toString("");
     m_autoStart = configObj["autoStart"].toBool(false);
-    m_userId = configObj["userId"].toString("");
-    m_userDisplayName = configObj["userDisplayName"].toString("");
-    m_oauthDeviceKey = configObj["oauthDeviceKey"].toString("");
-    m_tenantDisplayName = configObj["tenantDisplayName"].toString("");
     m_rememberQuitChoice = configObj["rememberQuitChoice"].toBool(false);
     m_stopOnQuit = configObj["stopOnQuit"].toBool(true);
     
@@ -183,10 +175,6 @@ void ConfigManager::resetToDefaults()
 {
     m_connectionKey.clear();
     m_autoStart = false;
-    m_userId.clear();
-    m_userDisplayName.clear();
-    m_oauthDeviceKey.clear();
-    m_tenantDisplayName.clear();
     m_rememberQuitChoice = false;
     m_stopOnQuit = true;
     std::clog << "ConfigManager: 配置已重置为默认值" << std::endl;

@@ -13,7 +13,6 @@
 #include <QFile>
 #include <iostream>
 #include <QDir>
-#include <QRegularExpression>
 
 SystemTray::SystemTray(QObject *parent)
     : QObject(parent)
@@ -25,20 +24,6 @@ SystemTray::SystemTray(QObject *parent)
     if (!m_configManager->loadConfig()) {
         std::cerr << "SystemTray: 配置加载失败，使用默认配置" << std::endl;
     }
-    
-    // 1.5. 初始化 Casdoor 登录器（仅专业版）
-#ifndef IS_COMMUNITY_VER
-    m_casdoorLogin = new CasdoorLogin("d3ff87a9cd6317695066", this);
-    connect(m_casdoorLogin, &CasdoorLogin::loginSuccess, this, [this](const QString &deviceKey, const QString &displayName, const QString &userId, const QString &userDisplayName, const QString &tenantName) {
-        handleLoginSuccess(deviceKey, displayName, userId, userDisplayName, tenantName);
-    });
-    connect(m_casdoorLogin, &CasdoorLogin::loginFailed, this, [this](const QString &errorMessage) {
-        closeProgressDialog();
-        m_lastError = errorMessage;
-        QMessageBox::warning(nullptr, "登录失败", errorMessage);
-    });
-    connect(m_casdoorLogin, &CasdoorLogin::proTenantsUpdated, this, &SystemTray::updateTenantMenu);
-#endif
     
     // 2. 加载配置
     loadSettings();
@@ -72,12 +57,8 @@ SystemTray::SystemTray(QObject *parent)
     connect(m_heartbeatTimer, &QTimer::timeout, this, &SystemTray::onHeartbeat);
     m_heartbeatTimer->start(2000);
     
-    // 8. 更新用户登录状态显示
-#ifndef IS_COMMUNITY_VER
+    // 8. 更新用户状态显示
     updateUserStatus();
-#else
-    updateCommunityUserStatus();
-#endif
     
     std::clog << "SystemTray: 初始化完成" << std::endl;
 }
@@ -115,9 +96,6 @@ void SystemTray::show() const
 void SystemTray::setAutoStartMode(bool autoStart)
 {
     m_isAutoStartMode = autoStart;
-#ifndef IS_COMMUNITY_VER
-    maybeAutoConnectOnStartup();
-#endif
 }
 
 void SystemTray::setupMenu()
@@ -130,66 +108,29 @@ void SystemTray::setupMenu()
     m_titleAction->setFont(titleFont);
     m_menu->addAction(m_titleAction);
     
-#ifndef IS_COMMUNITY_VER
-    // 专业版：用户登录状态 + 组织信息
-    m_userStatusAction = new QAction(QIcon(":/assets/user.svg"), "用户：未登录", this);
-    m_menu->addAction(m_userStatusAction);
-    
-    m_tenantStatusAction = new QAction(QIcon(":/assets/tenant.svg"), "", this);
-    m_tenantStatusAction->setVisible(false);
-    m_menu->addAction(m_tenantStatusAction);
-#endif
-    
     // 连接状态
     m_statusAction = new QAction(QIcon(":/assets/status-red.svg"), "状态：未启动", this);
     m_menu->addAction(m_statusAction);
     
     m_separator1 = m_menu->addSeparator();
 
-#ifndef IS_COMMUNITY_VER
-    m_devicesAction = new QAction(QIcon(":/assets/webconsole.svg"), "我的设备", this);
-    connect(m_devicesAction, &QAction::triggered, this, &SystemTray::onOpenDevices);
-    m_menu->addAction(m_devicesAction);
-
-    m_loginEasyTierProAction = new QAction(QIcon(":/assets/login.svg"), "登录 EasyTier Pro", this);
-    connect(m_loginEasyTierProAction, &QAction::triggered, this, &SystemTray::onLoginEasyTierPro);
-    m_menu->addAction(m_loginEasyTierProAction);
-
-    m_tenantMenu = new QMenu("切换组织", m_menu);
-    m_tenantMenu->setIcon(QIcon(":/assets/tenant.svg"));
-    m_menu->addMenu(m_tenantMenu);
-#endif
-    
     // 启动/停止连接
     m_toggleConnectionAction = new QAction(QIcon(":/assets/connect.svg"),
-#ifdef IS_COMMUNITY_VER
                                            "启动连接",
-#else
-                                           "连接 EasyTier Pro",
-#endif
                                            this);
     connect(m_toggleConnectionAction, &QAction::triggered, this, &SystemTray::onToggleConnection);
     m_menu->addAction(m_toggleConnectionAction);
     
     m_separator2 = m_menu->addSeparator();
     
-#ifdef IS_COMMUNITY_VER
-    // 社区版：设置连接地址与密钥
+    // 设置连接地址与密钥
     m_settingsAction = new QAction(QIcon(":/assets/settings.svg"), "设置连接地址与密钥", this);
     connect(m_settingsAction, &QAction::triggered, this, &SystemTray::onSettings);
     m_menu->addAction(m_settingsAction);
-#endif
 
     // 清空连接信息
-#ifdef IS_COMMUNITY_VER
-    const QString clearText = "清空连接信息";
-    m_clearConnectionAction = new QAction(QIcon(":/assets/clear.svg"), clearText, this);
+    m_clearConnectionAction = new QAction(QIcon(":/assets/clear.svg"), "清空连接信息", this);
     connect(m_clearConnectionAction, &QAction::triggered, this, &SystemTray::onClearConnectionInfo);
-#else
-    const QString clearText = "退出登录";
-    m_clearConnectionAction = new QAction(QIcon(":/assets/clear.svg"), clearText, this);
-    connect(m_clearConnectionAction, &QAction::triggered, this, &SystemTray::onLogout);
-#endif
     m_menu->addAction(m_clearConnectionAction);
 
     m_separator3 = m_menu->addSeparator();
@@ -199,24 +140,16 @@ void SystemTray::setupMenu()
     m_autoStartAction->setIcon(QIcon(":/assets/startup.svg"));
     m_autoStartAction->setCheckable(true);
     m_autoStartAction->setChecked(m_autoStart);
-    m_autoStartAction->setToolTip("开机后启动托盘程序，EasyTier Pro 会自动连接");
+    m_autoStartAction->setToolTip("开机后启动托盘程序，ET Connector 会自动连接");
     connect(m_autoStartAction, &QAction::toggled, this, &SystemTray::onAutoStart);
     m_menu->addAction(m_autoStartAction);
-
-#ifndef IS_COMMUNITY_VER
-    m_diagnosticsAction = new QAction(QIcon(":/assets/about.svg"), "诊断", this);
-    connect(m_diagnosticsAction, &QAction::triggered, this, &SystemTray::onDiagnostics);
-    m_menu->addAction(m_diagnosticsAction);
-#endif
     
     m_separator4 = m_menu->addSeparator();
     
-#ifdef IS_COMMUNITY_VER
     // 关于
     m_aboutAction = new QAction(QIcon(":/assets/about.svg"), "关于软件", this);
     connect(m_aboutAction, &QAction::triggered, this, &SystemTray::onAbout);
     m_menu->addAction(m_aboutAction);
-#endif
     
     // 退出
     m_quitAction = new QAction(QIcon(":/assets/quit.svg"), "退出客户端", this);
@@ -224,191 +157,7 @@ void SystemTray::setupMenu()
     m_menu->addAction(m_quitAction);
 }
 
-#ifndef IS_COMMUNITY_VER
 void SystemTray::updateUserStatus()
-{
-    // 判断是否使用EasyTier Pro官方控制台地址
-    QRegularExpression proRe("tcp://et-web\\.console\\.easytier\\.net:22020/(.+)");
-    QRegularExpressionMatch proMatch = proRe.match(m_connectionKey);
-    
-    std::clog << "updateUserStatus: hasProMatch=" << proMatch.hasMatch()
-              << " isEmpty=" << m_connectionKey.isEmpty() << std::endl;
-    
-    if (proMatch.hasMatch()) {
-        // 使用官方控制台，检查OAuth登录状态
-        QString currentDeviceKey = proMatch.captured(1).trimmed();
-        QString oauthDeviceKey = m_configManager->getOAuthDeviceKey();
-        
-        if (currentDeviceKey == oauthDeviceKey && !oauthDeviceKey.isEmpty()) {
-            // 一致，显示用户名
-            QString userDisplayName = m_configManager->getUserDisplayName();
-            if (!userDisplayName.isEmpty()) {
-                m_userStatusAction->setText(QString("用户：%1").arg(userDisplayName));
-                m_userStatusAction->setIcon(QIcon(":/assets/user-loggedin.svg"));
-                m_loginEasyTierProAction->setText("切换账号");
-                m_clearConnectionAction->setEnabled(true);
-                m_devicesAction->setEnabled(true);
-                updateTenantMenu();
-                
-                // 显示组织信息
-                QString tenantName = m_configManager->getTenantDisplayName();
-                if (!tenantName.isEmpty()) {
-                    m_tenantStatusAction->setText(QString("组织：%1").arg(tenantName));
-                    m_tenantStatusAction->setVisible(true);
-                } else {
-                    m_tenantStatusAction->setVisible(false);
-                }
-                
-                std::clog << "updateUserStatus: 显示已登录用户" << std::endl;
-                return;
-            }
-        }
-        
-        // 不一致或未保存，显示未登录
-        m_tenantStatusAction->setVisible(false);
-        m_userStatusAction->setText("用户：未登录");
-        m_userStatusAction->setIcon(QIcon(":/assets/user.svg"));
-        m_loginEasyTierProAction->setText("登录 EasyTier Pro");
-        m_clearConnectionAction->setEnabled(false);
-        m_devicesAction->setEnabled(false);
-        updateTenantMenu();
-        std::clog << "updateUserStatus: 显示未登录" << std::endl;
-    } else if (!m_connectionKey.isEmpty()) {
-        // 使用自定义连接信息
-        m_tenantStatusAction->setVisible(false);
-        m_userStatusAction->setText("用户：未登录");
-        m_userStatusAction->setIcon(QIcon(":/assets/user.svg"));
-        m_loginEasyTierProAction->setText("登录 EasyTier Pro");
-        m_clearConnectionAction->setEnabled(false);
-        m_devicesAction->setEnabled(false);
-        updateTenantMenu();
-        std::clog << "updateUserStatus: 专业版忽略自定义连接" << std::endl;
-    } else {
-        // 未设置连接地址
-        m_tenantStatusAction->setVisible(false);
-        m_userStatusAction->setText("用户：未登录");
-        m_userStatusAction->setIcon(QIcon(":/assets/user.svg"));
-        m_loginEasyTierProAction->setText("登录 EasyTier Pro");
-        m_clearConnectionAction->setEnabled(false);
-        m_devicesAction->setEnabled(false);
-        updateTenantMenu();
-        std::clog << "updateUserStatus: 显示未登录(空密钥)" << std::endl;
-    }
-}
-
-void SystemTray::updateTenantMenu()
-{
-    if (!m_tenantMenu) {
-        return;
-    }
-
-    m_tenantMenu->clear();
-    m_tenantActionIds.clear();
-
-    if (!hasProCredentials()) {
-        QAction *placeholder = m_tenantMenu->addAction("请先登录 EasyTier Pro");
-        placeholder->setEnabled(false);
-        m_tenantMenu->setEnabled(false);
-        return;
-    }
-
-    QList<CasdoorLogin::ProTenantInfo> tenants = m_casdoorLogin->proTenants();
-    if (tenants.isEmpty()) {
-        QAction *refreshAction = m_tenantMenu->addAction("重新登录以刷新组织列表");
-        connect(refreshAction, &QAction::triggered, this, &SystemTray::onLoginEasyTierPro);
-        m_tenantMenu->setEnabled(true);
-        return;
-    }
-
-    const QString currentTenantName = m_configManager->getTenantDisplayName();
-    for (const CasdoorLogin::ProTenantInfo &tenant : tenants) {
-        QAction *action = m_tenantMenu->addAction(tenant.name);
-        action->setCheckable(true);
-        action->setChecked(tenant.name == currentTenantName);
-        m_tenantActionIds.insert(action, tenant.id);
-        connect(action, &QAction::triggered, this, &SystemTray::onSwitchTenant);
-    }
-
-    m_tenantMenu->setEnabled(true);
-}
-
-bool SystemTray::hasProCredentials() const
-{
-    if (m_connectionKey.isEmpty() || !m_configManager) {
-        return false;
-    }
-
-    QRegularExpression proRe("tcp://et-web\\.console\\.easytier\\.net:22020/(.+)");
-    QRegularExpressionMatch proMatch = proRe.match(m_connectionKey);
-    if (!proMatch.hasMatch()) {
-        return false;
-    }
-
-    QString currentDeviceKey = proMatch.captured(1).trimmed();
-    return !currentDeviceKey.isEmpty()
-           && currentDeviceKey == m_configManager->getOAuthDeviceKey()
-           && !m_configManager->getUserId().isEmpty();
-}
-
-void SystemTray::handleLoginSuccess(const QString &deviceKey,
-                                    const QString &displayName,
-                                    const QString &userId,
-                                    const QString &userDisplayName,
-                                    const QString &tenantName)
-{
-    Q_UNUSED(displayName);
-
-    showProgressDialog("正在切换 EasyTier Pro 账号...");
-    updateStatus(ConnectionState::Connecting);
-
-    if (ETRunService::isServiceInstalled() || ETRunService::isRunning()) {
-        CommandResult removeResult;
-        if (!ETRunService::removeService(&removeResult)) {
-            rememberLastError("切换账号前移除旧服务失败", removeResult);
-            closeProgressDialog();
-            updateStatus(ETRunService::isRunning() ? ConnectionState::Connected : ConnectionState::NotStarted);
-            QMessageBox::warning(nullptr, "切换账号失败", m_lastError);
-            return;
-        }
-        QThread::msleep(500);
-    }
-
-    m_connectionKey = QString("tcp://et-web.console.easytier.net:22020/%1").arg(deviceKey);
-    m_configManager->setConnectionKey(m_connectionKey);
-    m_configManager->setUserId(userId);
-    m_configManager->setUserDisplayName(userDisplayName);
-    m_configManager->setOAuthDeviceKey(deviceKey);
-    m_configManager->setTenantDisplayName(tenantName);
-    m_configManager->saveConfig();
-    updateUserStatus();
-
-    closeProgressDialog();
-    startConnection(true);
-}
-
-void SystemTray::maybeAutoConnectOnStartup()
-{
-    if (!m_isAutoStartMode || !m_autoStart || !hasProCredentials() || ETRunService::isRunning()) {
-        return;
-    }
-
-    startConnection(false);
-}
-
-void SystemTray::clearProCredentials()
-{
-    m_connectionKey.clear();
-    m_configManager->setConnectionKey(QString());
-    m_configManager->setUserId(QString());
-    m_configManager->setUserDisplayName(QString());
-    m_configManager->setOAuthDeviceKey(QString());
-    m_configManager->setTenantDisplayName(QString());
-    m_configManager->saveConfig();
-}
-#endif
-
-#ifdef IS_COMMUNITY_VER
-void SystemTray::updateCommunityUserStatus()
 {
     if (!m_connectionKey.isEmpty()) {
         m_statusAction->setText("状态：已设置");
@@ -416,7 +165,6 @@ void SystemTray::updateCommunityUserStatus()
         m_statusAction->setText("状态：未设置");
     }
 }
-#endif
 
 void SystemTray::updateStatus(ConnectionState state)
 {
@@ -428,14 +176,8 @@ void SystemTray::updateStatus(ConnectionState state)
     
     switch (state) {
     case ConnectionState::NotStarted:
-        statusText =
-#ifdef IS_COMMUNITY_VER
-            "状态：未启动";
+        statusText = "状态：未启动";
         tooltipText = QString("%1 - 未启动").arg(APP_DISPLAY_NAME);
-#else
-            hasProCredentials() ? "状态：未连接" : "状态：未登录";
-        tooltipText = QString("%1 - %2").arg(APP_DISPLAY_NAME, hasProCredentials() ? "未连接" : "未登录");
-#endif
         statusIcon = ":/assets/status-red.svg";
         break;
     case ConnectionState::Connecting:
@@ -445,15 +187,7 @@ void SystemTray::updateStatus(ConnectionState state)
         break;
     case ConnectionState::Connected:
         statusText = "状态：已连接";
-        tooltipText =
-#ifdef IS_COMMUNITY_VER
-            QString("%1 - 已连接").arg(APP_DISPLAY_NAME);
-#else
-            QString("%1 - 已连接\n组织：%2\n用户：%3")
-                .arg(APP_DISPLAY_NAME,
-                     m_configManager->getTenantDisplayName().isEmpty() ? "-" : m_configManager->getTenantDisplayName(),
-                     m_configManager->getUserDisplayName().isEmpty() ? "-" : m_configManager->getUserDisplayName());
-#endif
+        tooltipText = QString("%1 - 已连接").arg(APP_DISPLAY_NAME);
         statusIcon = ":/assets/status-green.svg";
         break;
     }
@@ -468,13 +202,7 @@ void SystemTray::updateConnectionActions() const
 {
     switch (m_connectionState) {
     case ConnectionState::NotStarted:
-        m_toggleConnectionAction->setText(
-#ifdef IS_COMMUNITY_VER
-            "启动连接"
-#else
-            "连接 EasyTier Pro"
-#endif
-        );
+        m_toggleConnectionAction->setText("启动连接");
         m_toggleConnectionAction->setIcon(QIcon(":/assets/connect.svg"));
         m_toggleConnectionAction->setEnabled(true);
         break;
@@ -484,13 +212,7 @@ void SystemTray::updateConnectionActions() const
         m_toggleConnectionAction->setEnabled(false);
         break;
     case ConnectionState::Connected:
-        m_toggleConnectionAction->setText(
-#ifdef IS_COMMUNITY_VER
-            "停止连接"
-#else
-            "暂停连接"
-#endif
-        );
+        m_toggleConnectionAction->setText("停止连接");
         m_toggleConnectionAction->setIcon(QIcon(":/assets/disconnect.svg"));
         m_toggleConnectionAction->setEnabled(true);
         break;
@@ -520,19 +242,12 @@ void SystemTray::saveSettings()
 
 bool SystemTray::startConnection(bool showNotification)
 {
-#ifndef IS_COMMUNITY_VER
-    if (!hasProCredentials()) {
-        QMessageBox::warning(nullptr, "未登录", "请先登录 EasyTier Pro。");
-        return false;
-    }
-#else
     if (m_connectionKey.isEmpty()) {
         QMessageBox::warning(nullptr, "提示", "请先设置连接地址与密钥");
         return false;
     }
-#endif
 
-    showProgressDialog("正在连接 EasyTier Pro...");
+    showProgressDialog("正在连接 EasyTier...");
     updateStatus(ConnectionState::Connecting);
 
     CommandResult result;
@@ -543,13 +258,13 @@ bool SystemTray::startConnection(bool showNotification)
         updateStatus(ConnectionState::Connected);
         m_lastError.clear();
         if (showNotification) {
-            m_trayIcon->showMessage(APP_DISPLAY_NAME, "已连接 EasyTier Pro",
+            m_trayIcon->showMessage(APP_DISPLAY_NAME, "已连接 EasyTier",
                                     QSystemTrayIcon::Information, 3000);
         }
         return true;
     }
 
-    rememberLastError("连接 EasyTier Pro 失败", result);
+    rememberLastError("连接 EasyTier 失败", result);
     updateStatus(ConnectionState::NotStarted);
     if (showNotification) {
         m_trayIcon->showMessage("连接失败", m_lastError, QSystemTrayIcon::Warning, 5000);
@@ -602,127 +317,6 @@ void SystemTray::onToggleConnection()
     }
 }
 
-#ifndef IS_COMMUNITY_VER
-void SystemTray::onOpenDevices()
-{
-    if (m_devicesDialog.isNull()) {
-        m_devicesDialog = new DevicesDialog(m_configManager);
-    }
-
-    m_devicesDialog->show();
-    m_devicesDialog->raise();
-    m_devicesDialog->activateWindow();
-}
-
-void SystemTray::onLoginEasyTierPro()
-{
-    if (hasProCredentials()) {
-        QMessageBox::StandardButton reply = QMessageBox::question(nullptr,
-            "切换账号",
-            "切换账号会停止并卸载当前 EasyTier Core 服务，然后使用新账号重新连接。",
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-
-        if (reply != QMessageBox::Yes) {
-            return;
-        }
-    }
-
-    // 启动 OAuth 登录流程
-    m_casdoorLogin->startLogin();
-}
-
-void SystemTray::onSwitchTenant()
-{
-    QAction *action = qobject_cast<QAction*>(sender());
-    if (!action || !m_tenantActionIds.contains(action)) {
-        return;
-    }
-
-    const QString tenantName = action->text();
-    if (tenantName == m_configManager->getTenantDisplayName()) {
-        return;
-    }
-
-    QMessageBox::StandardButton reply = QMessageBox::question(nullptr,
-        "切换组织",
-        QString("切换到“%1”会重建本机设备凭据并自动重新连接。").arg(tenantName),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::Yes);
-
-    if (reply != QMessageBox::Yes) {
-        return;
-    }
-
-    showProgressDialog("正在切换组织...");
-    if (ETRunService::isServiceInstalled() || ETRunService::isRunning()) {
-        CommandResult removeResult;
-        if (!ETRunService::removeService(&removeResult)) {
-            rememberLastError("切换组织前移除旧服务失败", removeResult);
-            closeProgressDialog();
-            updateStatus(ETRunService::isRunning() ? ConnectionState::Connected : ConnectionState::NotStarted);
-            QMessageBox::warning(nullptr, "切换组织失败", m_lastError);
-            return;
-        }
-        QThread::msleep(500);
-    }
-
-    m_casdoorLogin->switchProTenant(m_tenantActionIds.value(action));
-}
-
-void SystemTray::onLogout()
-{
-    if (!hasProCredentials()) {
-        return;
-    }
-
-    QMessageBox::StandardButton reply = QMessageBox::question(nullptr,
-        "退出登录",
-        "退出登录会暂停连接、卸载 EasyTier Core 服务，并清空本机账号与设备凭据。",
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (reply != QMessageBox::Yes) {
-        return;
-    }
-
-    showProgressDialog("正在退出登录...");
-    CommandResult result;
-    bool removed = true;
-    if (ETRunService::isServiceInstalled() || ETRunService::isRunning()) {
-        removed = ETRunService::removeService(&result);
-    }
-
-    clearProCredentials();
-    closeProgressDialog();
-    updateStatus(ConnectionState::NotStarted);
-    updateUserStatus();
-
-    if (removed) {
-        m_lastError.clear();
-        m_trayIcon->showMessage(APP_DISPLAY_NAME, "已退出登录并移除本机服务",
-                                QSystemTrayIcon::Information, 3000);
-    } else {
-        rememberLastError("退出登录时移除服务失败", result);
-        QMessageBox::warning(nullptr, "退出登录", "账号状态已清空，但本机服务可能仍存在。\n" + m_lastError);
-    }
-}
-
-void SystemTray::onDiagnostics()
-{
-    if (m_diagnosticsDialog.isNull()) {
-        m_diagnosticsDialog = new DiagnosticsDialog(m_lastError);
-    } else {
-        m_diagnosticsDialog->deleteLater();
-        m_diagnosticsDialog = new DiagnosticsDialog(m_lastError);
-    }
-
-    m_diagnosticsDialog->show();
-    m_diagnosticsDialog->raise();
-    m_diagnosticsDialog->activateWindow();
-}
-#endif
-
 void SystemTray::onSettings()
 {
     // 创建或复用对话框
@@ -738,11 +332,7 @@ void SystemTray::onSettings()
         m_connectionKey = m_settingsDialog->getConnectionKey();
         m_configManager->setConnectionKey(m_connectionKey);
         m_configManager->saveConfig();
-#ifndef IS_COMMUNITY_VER
         updateUserStatus();
-#else
-        updateCommunityUserStatus();
-#endif
     }
      
     // QPointer 会在对象删除后自动变为 nullptr
@@ -766,16 +356,8 @@ void SystemTray::onClearConnectionInfo()
     // 清空连接信息
     m_connectionKey.clear();
     m_configManager->setConnectionKey(QString());
-#ifndef IS_COMMUNITY_VER
-    m_configManager->setOAuthDeviceKey(QString());
-    m_configManager->setTenantDisplayName(QString());
-#endif
     m_configManager->saveConfig();
-#ifndef IS_COMMUNITY_VER
     updateUserStatus();
-#else
-    updateCommunityUserStatus();
-#endif
 
     // 如果服务正在运行，停止服务
     if (ETRunService::isRunning()) {
@@ -1045,14 +627,7 @@ void SystemTray::onQuit()
 
 void SystemTray::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 {
-#ifndef IS_COMMUNITY_VER
-    // 双击打开本地设备窗口（仅专业版）
-    if (reason == QSystemTrayIcon::DoubleClick) {
-        onOpenDevices();
-    }
-#else
     Q_UNUSED(reason);
-#endif
 }
 
 void SystemTray::onHeartbeat()
@@ -1079,12 +654,8 @@ void SystemTray::onConnectionKeyChanged()
     m_configManager->setConnectionKey(m_connectionKey);
     m_configManager->saveConfig();
     
-    // 更新用户登录状态
-#ifndef IS_COMMUNITY_VER
+    // 更新用户状态
     updateUserStatus();
-#else
-    updateCommunityUserStatus();
-#endif
     
     // 如果服务已运行
     if (ETRunService::isRunning()) {

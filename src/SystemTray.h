@@ -20,17 +20,11 @@
 #include <QPointer>
 #include <QTimer>
 #include <QSettings>
-#include <QMap>
 #include "SettingsDialog.h"
 #include "AboutDialog.h"
 #include "QuitConfirmDialog.h"
 #include "ETRunService.h"
 #include "ConfigManager.h"
-#ifndef IS_COMMUNITY_VER
-#include "CasdoorLogin.h"
-#include "DevicesDialog.h"
-#include "DiagnosticsDialog.h"
-#endif
 
 /**
  * @brief 连接状态枚举
@@ -60,13 +54,6 @@ public:
 
 private slots:
     void onToggleConnection();
-#ifndef IS_COMMUNITY_VER
-    void onOpenDevices();
-    void onLoginEasyTierPro();
-    void onSwitchTenant();
-    void onLogout();
-    void onDiagnostics();
-#endif
     void onSettings();
     void onAutoStart(bool checked);
     void onAbout();
@@ -81,20 +68,7 @@ private:
     void setupMenu();
     void updateStatus(ConnectionState state);
     void updateConnectionActions() const;
-#ifndef IS_COMMUNITY_VER
     void updateUserStatus();
-    void updateTenantMenu();
-    bool hasProCredentials() const;
-    void handleLoginSuccess(const QString &deviceKey,
-                            const QString &displayName,
-                            const QString &userId,
-                            const QString &userDisplayName,
-                            const QString &tenantName);
-    void maybeAutoConnectOnStartup();
-    void clearProCredentials();
-#else
-    void updateCommunityUserStatus();
-#endif
     bool startConnection(bool showNotification);
     bool pauseConnection(bool showNotification);
     void rememberLastError(const QString &context, const CommandResult &result);
@@ -113,9 +87,6 @@ private:
     
     // 核心组件
     ConfigManager *m_configManager = nullptr;       ///< 配置管理器
-#ifndef IS_COMMUNITY_VER
-    CasdoorLogin *m_casdoorLogin = nullptr;         ///< Casdoor OAuth 登录器
-#endif
     
     // 托盘 UI
     QSystemTrayIcon *m_trayIcon = nullptr;          ///< 系统托盘图标
@@ -124,20 +95,10 @@ private:
     
     // 菜单项
     QAction *m_titleAction = nullptr;
-#ifndef IS_COMMUNITY_VER
-    QAction *m_userStatusAction = nullptr;
-    QAction *m_tenantStatusAction = nullptr;
-#endif
     QAction *m_statusAction = nullptr;
     QAction *m_separator1 = nullptr;
     QAction *m_toggleConnectionAction = nullptr;
     QAction *m_separator2 = nullptr;
-#ifndef IS_COMMUNITY_VER
-    QAction *m_devicesAction = nullptr;
-    QAction *m_loginEasyTierProAction = nullptr;
-    QMenu *m_tenantMenu = nullptr;
-    QAction *m_diagnosticsAction = nullptr;
-#endif
     QAction *m_settingsAction = nullptr;
     QAction *m_clearConnectionAction = nullptr;
     QAction *m_separator3 = nullptr;
@@ -148,10 +109,6 @@ private:
     
     // 对话框（使用 QPointer 自动管理，避免悬空指针）
     QPointer<SettingsDialog> m_settingsDialog;
-#ifndef IS_COMMUNITY_VER
-    QPointer<DevicesDialog> m_devicesDialog;
-    QPointer<DiagnosticsDialog> m_diagnosticsDialog;
-#endif
     QPointer<AboutDialog> m_aboutDialog;
     QPointer<QuitConfirmDialog> m_quitConfirmDialog;
     
@@ -161,7 +118,6 @@ private:
     bool m_isAutoStartMode = false;     ///< 是否从开机自启启动
     QString m_connectionKey;            ///< 连接密钥
     QString m_lastError;                ///< 最近一次服务/登录错误
-    QMap<QAction*, QString> m_tenantActionIds; ///< 组织菜单项到 EasyTier Pro 组织ID的映射
     
     // 心跳定时器
     QTimer *m_heartbeatTimer = nullptr; ///< 每2秒检测 easytier-core 进程状态
