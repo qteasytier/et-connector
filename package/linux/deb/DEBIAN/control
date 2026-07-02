@@ -1,0 +1,10 @@
+Package: easytier-connector
+Version: 0.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libc6, libstdc++6, libqt6core6, libqt6gui6, libqt6widgets6, libqt6svg6, qt6-qpa-plugins, qt6-image-formats-plugins
+Recommends: adwaita-icon-theme, gnome-shell-extension-appindicator
+Maintainer: Myqfeng <viagrahuang@outlook.com>
+Description: EasyTier Web Connector
+  This is a Easytier Connector which is based on Qt6.

@@ -1,0 +1,14 @@
+[Unit]
+Description=EasyTier Service
+After=network.target network-online.target syslog.target
+Wants=network.target network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/etconnector/qtet-connector-daemon
+Restart=always
+RestartSec=3s
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

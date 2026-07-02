@@ -1,0 +1,20 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/assets">
+        <file alias="autoconnect.svg">images/autoconnect.svg</file>
+        <file alias="startup.svg">images/startup.svg</file>
+        <file alias="status-red.svg">images/status-red.svg</file>
+        <file alias="status-yellow.svg">images/status-yellow.svg</file>
+        <file alias="status-green.svg">images/status-green.svg</file>
+        <file alias="connect.svg">images/connect.svg</file>
+        <file alias="disconnect.svg">images/disconnect.svg</file>
+        <file alias="settings.svg">images/settings.svg</file>
+        <file alias="about.svg">images/about.svg</file>
+        <file alias="quit.svg">images/quit.svg</file>
+        <file alias="user-opensource.svg">images/user-opensource.svg</file>
+        <file alias="clear.svg">images/clear.svg</file>
+    </qresource>
+    <qresource prefix="/favicon">
+        <file alias="favicon-open.svg">../favicon/favicon-open.svg</file>
+    </qresource>
+</RCC>
