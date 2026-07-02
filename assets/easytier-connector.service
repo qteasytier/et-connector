@@ -6,6 +6,7 @@ Wants=network.target network-online.target
 [Service]
 Type=simple
 ExecStart=/opt/etconnector/qtet-connector-daemon
+WorkingDirectory=/opt/etconnector
 Restart=always
 RestartSec=3s
 StartLimitIntervalSec=0
