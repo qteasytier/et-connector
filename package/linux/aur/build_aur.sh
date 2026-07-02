@@ -62,6 +62,7 @@ pkgver=__VERSION__
 pkgrel=__REL__
 pkgdesc="__DESC__"
 arch=('x86_64')
+options=('!debug')
 url="https://gitee.com/myqfeng/et-connector"
 license=('LGPL3')
 depends=('qt6-base' 'qt6-svg')

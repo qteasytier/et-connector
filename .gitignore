@@ -1,3 +1,5 @@
 /Install/
 /build/
-
+/.idea/
+/.qtcreator/
+/*build*/
