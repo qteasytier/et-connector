@@ -35,11 +35,8 @@ void ConfigManager::initializeConfigPath()
 {
     // 候选路径列表，按优先级从高到低排列
     QStringList candidatePaths;
-    
-    // 第一优先级：AppLocalDataLocation
-    //   Windows: C:/Users/<user>/AppData/Local/<AppName>
-    //   Linux:   ~/.local/share/<AppName>
-    //   macOS:   ~/Library/Application Support/<AppName>
+
+    candidatePaths << QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     candidatePaths << QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     candidatePaths << QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     candidatePaths << QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
@@ -67,7 +64,7 @@ void ConfigManager::initializeConfigPath()
     }
     
     // 所有备选路径都不可写，使用当前目录作为最终兜底
-    m_configDirPath = QDir::currentPath() + "/EasyTier";
+    m_configDirPath = QDir::currentPath() + "/easytier-connector";
     m_configFilePath = m_configDirPath + "/conf.json";
     std::cerr << "ConfigManager: 无法找到可写配置目录，使用: " << m_configFilePath.toStdString() << std::endl;
 }

@@ -6,7 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # 解析参数
 VERSION=""
 REL="1"
-IS_PRO=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version)
@@ -17,12 +16,8 @@ while [[ $# -gt 0 ]]; do
             REL="$2"
             shift 2
             ;;
-        --pro)
-            IS_PRO=true
-            shift
-            ;;
         *)
-            echo "用法: $0 --version x.x.x [--rel x] [--pro]"
+            echo "用法: $0 --version x.x.x [--rel x]"
             exit 1
             ;;
     esac
@@ -30,19 +25,15 @@ done
 
 if [[ -z "$VERSION" ]]; then
     echo "错误: --version 参数为必填项"
-    echo "用法: $0 --version x.x.x [--rel x] [--pro]"
+    echo "用法: $0 --version x.x.x [--rel x]"
     exit 1
 fi
 
-if $IS_PRO; then
-    PKG_NAME="easytier-pro-connector"
-    PKG_DESC="EasyTier Pro Web Connector based on Qt6"
-    echo "=== EasyTier Pro Connector AUR 打包 ==="
-else
-    PKG_NAME="easytier-connector"
-    PKG_DESC="EasyTier Web Connector based on Qt6"
-    echo "=== EasyTier Connector AUR 打包 ==="
-fi
+
+PKG_NAME="easytier-connector"
+PKG_DESC="基于 Qt6 的系统托盘应用程序，用于连接 EasyTier Web 控制台（配置服务器）。EasyTier Web Connector based on Qt6."
+echo "=== EasyTier Connector AUR 打包 ==="
+
 
 echo "版本号: $VERSION"
 echo "pkgrel: $REL"
@@ -63,12 +54,12 @@ pkgrel=__REL__
 pkgdesc="__DESC__"
 arch=('x86_64')
 options=('!debug')
-url="https://gitee.com/myqfeng/et-connector"
+url="https://gitee.com/qteasytier/easytier-connector"
 license=('LGPL3')
 depends=('qt6-base' 'qt6-svg')
 makedepends=('cmake' 'git')
 install=__INSTALL_FILE__
-source=("${pkgname}::git+https://gitee.com/qteasytier/easytier-connector.git#tag=v${pkgver}")
+source=("${pkgname}::git+https://gitee.com/qteasytier/easytier-connector.git#tag=${pkgver}")
 sha256sums=('SKIP')
 
 build() {

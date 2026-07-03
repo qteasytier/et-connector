@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
     // 保持内部 applicationName 为 "EasyTier"，
     // 避免配置路径迁移到 "EasyTier Pro/conf.json"。
     // 用户看到的是 APP_DISPLAY_NAME = "ET Connector"。
-    app.setApplicationName("EasyTier");
+    app.setApplicationName("easytier-connector");
     // 版本格式: "1.0.0(et2.6.3)" - 前端版本(后端协议版本)
     app.setApplicationVersion(QString(APP_VERSION)+"(et" + ET_VERSION + ")");
     // 托盘应用：关闭最后一个窗口后不退出，继续在后台运行
