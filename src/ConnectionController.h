@@ -37,7 +37,8 @@ enum class ServiceState {
     Idle,           ///< 配置服务器未启动，可发起连接
     Connecting,     ///< 正在连接配置服务器，等待心跳确认（最多 30s）
     Connected,      ///< 配置服务器已成功连接，业务正常运行
-    Stopping        ///< 正在停止配置服务器，等待后端响应（最多 10s）
+    Stopping,       ///< 正在停止配置服务器，等待后端响应（最多 10s）
+    Unknown         ///< 未知状态，用于与配置服务器通信失败时的默认值
 };
 
 // ============================================================================
@@ -76,11 +77,9 @@ public:
     void requestQuit();
     void restartAfterKeyChange();
 
-    /** 查询后端 IPC 是否已连接 */
-    DaemonState daemonState() const { return m_daemonState; }
-
-    /** 查询配置服务器是否在运行（Connecting/Connected/Stopping） */
-    bool isRunning() const;
+    /** 查询状态 */
+    [[nodiscard]] DaemonState daemonState() const { return m_daemonState; }
+    [[nodiscard]] ServiceState serviceState() const { return m_serviceState; }
 
     /** 获取最近一次错误消息，成功时为空 */
     QString lastError() const { return m_lastError; }
@@ -156,7 +155,7 @@ private:
     void tryReconnect();
 
     void showProgress(const QString &text);
-    void closeProgress();
+    void closeProgress() const;
 
     // ========================================================================
     // 成员变量
@@ -172,18 +171,18 @@ private:
     PendingAction m_pendingAction = PendingAction::None;
 
     int m_reconnectCount = 0;
-    static constexpr int MAX_RECONNECT = 3;
-    static constexpr int HEARTBEAT_INTERVAL_MS = 2000;
-    static constexpr int HEARTBEAT_INTERVAL_FAST_MS = 1000;
-    static constexpr int START_TIMEOUT_MS = 30000;
-    static constexpr int STOP_TIMEOUT_MS = 10000;
-    static constexpr int RESTART_DELAY_MS = 500;
+    static constexpr int MAX_RECONNECT = 3;                    /// > 重连次数上限
+    static constexpr int HEARTBEAT_INTERVAL_MS = 2000;         /// > 心跳间隔（毫秒）
+    static constexpr int HEARTBEAT_INTERVAL_FAST_MS = 1000;    /// > 快速心跳间隔（毫秒）
+    static constexpr int START_TIMEOUT_MS = 30000;             /// > 启动超时时间（毫秒）
+    static constexpr int STOP_TIMEOUT_MS = 10000;              /// > 停止超时时间（毫秒）
+    static constexpr int RESTART_DELAY_MS = 500;               /// > 重启延迟（毫秒）
 
-    QTimer *m_heartbeatTimer;
-    QTimer *m_startTimeout;
-    QTimer *m_stopTimeout;
+    QTimer *m_heartbeatTimer;   /// > 心跳定时器
+    QTimer *m_startTimeout;     /// > 启动超时定时器
+    QTimer *m_stopTimeout;      /// > 停止超时定时器
 
-    QPointer<QProgressDialog> m_progressDialog;
-};
+    QPointer<QProgressDialog> m_progressDialog;  /// > 进度对话框
+   };
 
 #endif // CONNECTIONCONTROLLER_H

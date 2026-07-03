@@ -54,13 +54,16 @@ private slots:
     // ========================================================================
 
     /** 点击"启动连接"/"停止连接"菜单项 */
-    void onToggleConnection();
+    void onToggleConnection() const;
 
     /** 点击"设置连接地址与密钥" → 弹出设置对话框 */
     void onSettings();
 
     /** 点击"开机启动托盘程序"复选框切换 */
     void onAutoStart(bool checked);
+
+    /** 点击"自动连接"复选框切换 */
+    void onAutoConnect(bool checked);
 
     /** 点击"关于软件" */
     void onAbout();
@@ -115,7 +118,7 @@ private:
     void loadSettings();
 
     /** 将开机自启设置同步到 ConfigManager 并保存 */
-    void saveSettings();
+    void saveSettings() const;
 
     // ========================================================================
     // 开机自启管理（平台特定实现）
@@ -148,6 +151,7 @@ private:
 
     // 菜单项 - 每个 action 对应一个菜单项，通过 separator 分组
     QAction *m_titleAction = nullptr;                   ///< 标题栏（应用名称）
+    QAction *m_userAction = nullptr;                    ///< 用户栏（密钥设置状态）
     QAction *m_statusAction = nullptr;                  ///< 连接状态行
     QAction *m_backendStatusAction = nullptr;           ///< 后端守护进程连接状态行
     QAction *m_separator1 = nullptr;
@@ -157,6 +161,7 @@ private:
     QAction *m_clearConnectionAction = nullptr;         ///< "清空连接信息"
     QAction *m_separator3 = nullptr;
     QAction *m_autoStartAction = nullptr;               ///< "开机启动托盘程序"（复选框）
+    QAction *m_autoConnectAction = nullptr;             ///< "自动连接"（复选框）
     QAction *m_separator4 = nullptr;
     QAction *m_separator5 = nullptr;
     QAction *m_aboutAction = nullptr;                   ///< "关于软件"
@@ -168,7 +173,9 @@ private:
 
     // 状态
     bool m_autoStart = false;           ///< 是否开机启动托盘程序
+    bool m_autoConnect = false;         ///< 是否启动后自动连接
     bool m_isAutoStartMode = false;     ///< 是否从开机自启启动（影响启动通知）
+    QMetaObject::Connection m_autoConnectConn;  ///< 自动连接的信号连接句柄（一次后断开）
 };
 
 #endif // SYSTEMTRAY_H

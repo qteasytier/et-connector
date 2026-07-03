@@ -67,16 +67,6 @@ ConnectionController::~ConnectionController()
 }
 
 // ============================================================================
-// 公共查询接口
-// ============================================================================
-
-bool ConnectionController::isRunning() const
-{
-    return m_daemonState == DaemonState::Connected
-        && m_serviceState != ServiceState::Idle;
-}
-
-// ============================================================================
 // 两级状态管理 helper
 // ============================================================================
 
@@ -86,8 +76,6 @@ void ConnectionController::setDaemonConnected()
     m_daemonState = DaemonState::Connected;
     emit daemonStateChanged(m_daemonState);
 
-    // 后端连上时 Service 永远是 Idle —— 除非被心跳发现已在运行
-    setServiceState(ServiceState::Idle);
 }
 
 void ConnectionController::setDaemonDisconnected()
@@ -102,8 +90,8 @@ void ConnectionController::setDaemonDisconnected()
     closeProgress();
     m_reconnectCount = 0;
 
-    // Service 强制回到 Idle
-    setServiceState(ServiceState::Idle);
+    // Service 强制回到 Unknown
+    setServiceState(ServiceState::Unknown);
 }
 
 void ConnectionController::setServiceState(ServiceState state)
@@ -139,6 +127,8 @@ void ConnectionController::setServiceState(ServiceState state)
     case ServiceState::Stopping:
         m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL_MS);
         // stopTimeout 由 doStopConnection 启动
+        break;
+    case ServiceState::Unknown:
         break;
     }
 
@@ -190,7 +180,7 @@ void ConnectionController::doStartConnection()
 
 void ConnectionController::stopConnection()
 {
-    if (isRunning()) {
+    if (m_serviceState != ServiceState::Idle && m_serviceState != ServiceState::Unknown) {
         doStopConnection();
     } else {
         processQueuedActions();
@@ -218,7 +208,7 @@ void ConnectionController::doStopConnection()
 
 void ConnectionController::requestQuit()
 {
-    if (isRunning()) {
+    if (m_serviceState != ServiceState::Idle && m_serviceState != ServiceState::Unknown) {
         m_pendingAction = PendingAction::QuitAfterStop;
         stopConnection();
     } else {
@@ -229,7 +219,7 @@ void ConnectionController::requestQuit()
 void ConnectionController::restartAfterKeyChange()
 {
     const QString key = m_configManager->getConnectionKey();
-    if (isRunning()) {
+    if (m_serviceState != ServiceState::Idle && m_serviceState != ServiceState::Unknown) {
         if (key.isEmpty()) {
             stopConnection();
         } else {
@@ -289,7 +279,6 @@ void ConnectionController::onIpcConnected()
     std::clog << "ConnectionController: 已连接到后端守护进程" << std::endl;
     setDaemonConnected();
 
-    // 连接成功后立即查询配置服务器是否已在运行（前端重启场景）
     m_ipcClient->isConfigServerClientConnected();
     m_ipcClient->pollConfigEvents();
 }
@@ -315,7 +304,7 @@ void ConnectionController::onIpcError(const QString &message)
     }
 }
 
-void ConnectionController::onStartFinished(bool success, const QString &error)
+void ConnectionController::onStartFinished(const bool success, const QString &error)
 {
     if (success) {
         // IPC 返回成功只代表后端已受理请求，正在尝试连接配置服务器
@@ -355,6 +344,15 @@ void ConnectionController::onStopFinished(bool success, const QString &error)
 
 void ConnectionController::onStateQueried(bool isConnected)
 {
+    if (m_serviceState == ServiceState::Unknown) {
+        if (isConnected) {
+            setServiceState(ServiceState::Connected);
+        } else {
+            setServiceState(ServiceState::Idle);
+        }
+        return;
+    }
+
     // 后端报告已连接，但前端处于 Idle → 同步为 Connected（其他实例启动的）
     if (isConnected && m_serviceState == ServiceState::Idle) {
         std::clog << "ConnectionController: 心跳检测 - 配置服务器已连接" << std::endl;
@@ -413,6 +411,9 @@ void ConnectionController::onHeartbeat()
     case ServiceState::Stopping:
         // 等待停止完成 → 不操作，由超时兜底
         break;
+    case ServiceState::Unknown:
+        m_ipcClient->isConfigServerClientConnected();
+        break;
     }
 }
 
@@ -464,8 +465,7 @@ void ConnectionController::showProgress(const QString &text)
     m_progressDialog->show();
 }
 
-void ConnectionController::closeProgress()
-{
+void ConnectionController::closeProgress() const {
     if (!m_progressDialog.isNull()) {
         m_progressDialog->close();
         m_progressDialog->deleteLater();

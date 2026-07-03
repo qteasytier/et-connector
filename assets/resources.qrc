@@ -11,8 +11,9 @@
         <file alias="settings.svg">images/settings.svg</file>
         <file alias="about.svg">images/about.svg</file>
         <file alias="quit.svg">images/quit.svg</file>
-        <file alias="user-opensource.svg">images/user-opensource.svg</file>
+        <file alias="user.svg">images/user.svg</file>
         <file alias="clear.svg">images/clear.svg</file>
+        <file alias="user-loggedin.svg">images/user-loggedin.svg</file>
     </qresource>
     <qresource prefix="/favicon">
         <file alias="favicon-open.svg">../favicon/favicon-open.svg</file>

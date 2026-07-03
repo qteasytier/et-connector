@@ -127,6 +127,7 @@ bool ConfigManager::saveConfig()
     QJsonObject configObj;
     configObj["connectionKey"] = m_connectionKey;
     configObj["autoStart"] = m_autoStart;
+    configObj["autoConnect"] = m_autoConnect;
     configObj["secureMode"] = m_secureMode;
     
     QJsonDocument doc(configObj);
@@ -184,6 +185,7 @@ bool ConfigManager::loadConfig()
     // toString("") 和 toBool(false) 会处理类型不匹配的情况
     m_connectionKey = configObj["connectionKey"].toString("");
     m_autoStart = configObj["autoStart"].toBool(false);
+    m_autoConnect = configObj["autoConnect"].toBool(false);
     m_secureMode = configObj["secureMode"].toBool(true);
     
     std::clog << "ConfigManager: 配置已加载" << std::endl;
@@ -194,6 +196,7 @@ void ConfigManager::resetToDefaults()
 {
     m_connectionKey.clear();
     m_autoStart = false;
+    m_autoConnect = false;
     m_secureMode = true;
     std::clog << "ConfigManager: 配置已重置为默认值" << std::endl;
 }

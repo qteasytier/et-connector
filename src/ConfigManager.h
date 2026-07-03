@@ -42,6 +42,7 @@ public:
     // ========================================================================
     QString getConnectionKey() const { return m_connectionKey; }
     bool getAutoStart() const { return m_autoStart; }
+    bool getAutoConnect() const { return m_autoConnect; }
     QString getConfigFilePath() const { return m_configFilePath; }
     bool getSecureMode() const { return m_secureMode; }
 
@@ -50,6 +51,7 @@ public:
     // ========================================================================
     void setConnectionKey(const QString &key) { m_connectionKey = key; }
     void setAutoStart(bool autoStart) { m_autoStart = autoStart; }
+    void setAutoConnect(bool enabled) { m_autoConnect = enabled; }
     void setSecureMode(bool secure) { m_secureMode = secure; }
     
     /** 将当前内存中的配置写入 JSON 文件 */
@@ -67,6 +69,7 @@ private:
     // ========================================================================
     QString m_connectionKey;              ///< 连接密钥（配置服务器地址）
     bool m_autoStart = false;             ///< 是否开机启动托盘程序
+    bool m_autoConnect = false;           ///< 是否启动后自动连接
     bool m_secureMode = true;             ///< 是否启用安全模式（默认启用）
     
     // ========================================================================

@@ -59,13 +59,29 @@ SystemTray::SystemTray(QObject *parent)
     connect(m_trayIcon, &QSystemTrayIcon::activated,
             this, &SystemTray::onTrayActivated);
 
+    // --- 更新密钥设置状态文字 ---
+    updateUserStatus();
+
     // --- 5. 连接控制器 ---
     m_connectionController = new ConnectionController(m_configManager, this);
     initController();
     updateStatus(m_connectionController->daemonState(), ServiceState::Idle);
 
-    // --- 6. 更新密钥设置状态文字 ---
-    updateUserStatus();
+    // --- 6. 自动连接（仅首次后端连上时触发一次）---
+    if (m_autoConnect && !m_configManager->getConnectionKey().isEmpty()) {
+        if (m_connectionController->daemonState() == DaemonState::Connected) {
+            m_connectionController->startConnection();
+        } else {
+            m_autoConnectConn = connect(
+                m_connectionController, &ConnectionController::daemonStateChanged,
+                this, [this](DaemonState ds) {
+                    if (ds == DaemonState::Connected) {
+                        QObject::disconnect(m_autoConnectConn);
+                        m_connectionController->startConnection();
+                    }
+                });
+        }
+    }
 
     std::clog << "SystemTray: 初始化完成" << std::endl;
 }
@@ -88,13 +104,13 @@ void SystemTray::initController()
 {
     // --- 后端 IPC 状态变化 → 更新"守护进程"行 ---
     connect(m_connectionController, &ConnectionController::daemonStateChanged,
-            this, [this](DaemonState ds) {
+            this, [this](const DaemonState ds) {
         updateStatus(ds, ServiceState::Idle);
     });
 
     // --- 配置服务器状态变化 → 更新"状态"行和按钮 ---
     connect(m_connectionController, &ConnectionController::serviceStateChanged,
-            this, [this](ServiceState ss) {
+            this, [this](const ServiceState ss) {
         updateStatus(m_connectionController->daemonState(), ss);
     });
 
@@ -159,11 +175,12 @@ void SystemTray::setupMenu()
 
     m_separator1 = m_menu->addSeparator();
 
-    m_statusAction = new QAction(QIcon(":/assets/status-red.svg"), "状态：后端未连接", this);
+    m_userAction = new QAction(QIcon(":/assets/user.svg"), "用户：未设置", this);
+    m_menu->addAction(m_userAction);
+
+    m_statusAction = new QAction(QIcon(":/assets/status-red.svg"), "状态：未连接", this);
     m_menu->addAction(m_statusAction);
 
-    m_backendStatusAction = new QAction(QIcon(":/assets/status-red.svg"), "守护进程：未连接", this);
-    m_menu->addAction(m_backendStatusAction);
 
     m_separator2 = m_menu->addSeparator();
 
@@ -194,6 +211,13 @@ void SystemTray::setupMenu()
     connect(m_autoStartAction, &QAction::toggled, this, &SystemTray::onAutoStart);
     m_menu->addAction(m_autoStartAction);
 
+    m_autoConnectAction = new QAction("自动连接", this);
+    m_autoConnectAction->setCheckable(true);
+    m_autoConnectAction->setChecked(m_autoConnect);
+    m_autoConnectAction->setToolTip("启动程序后自动尝试连接配置服务器");
+    connect(m_autoConnectAction, &QAction::toggled, this, &SystemTray::onAutoConnect);
+    m_menu->addAction(m_autoConnectAction);
+
     m_separator5 = m_menu->addSeparator();
 
     m_aboutAction = new QAction(QIcon(":/assets/about.svg"), "关于软件", this);
@@ -203,6 +227,9 @@ void SystemTray::setupMenu()
     m_quitAction = new QAction(QIcon(":/assets/quit.svg"), "退出客户端", this);
     connect(m_quitAction, &QAction::triggered, this, &SystemTray::onQuit);
     m_menu->addAction(m_quitAction);
+
+    m_backendStatusAction = new QAction(QIcon(":/assets/status-red.svg"), "守护进程：未连接", this);
+    m_menu->addAction(m_backendStatusAction);
 }
 
 // ============================================================================
@@ -212,9 +239,11 @@ void SystemTray::setupMenu()
 void SystemTray::updateUserStatus()
 {
     if (!m_configManager->getConnectionKey().isEmpty()) {
-        m_statusAction->setText("状态：已设置");
+        m_userAction->setText("用户：已设置");
+        m_userAction->setIcon(QIcon(":/assets/user-loggedin.svg"));
     } else {
-        m_statusAction->setText("状态：未设置");
+        m_userAction->setText("用户：未设置");
+        m_userAction->setIcon(QIcon(":/assets/user.svg"));
     }
 }
 
@@ -230,9 +259,6 @@ void SystemTray::updateStatus(DaemonState daemon, ServiceState service)
     }
 
     // ---- 配置服务器状态行 ----
-    // 注意：updateUserStatus 会覆盖 m_statusAction 的文字，
-    //       这里只在 daemon 断开或 service 非 Idle 时才更新。
-    //       Idle 时保持 updateUserStatus 设置的"已设置/未设置"。
     QString statusText;
     QString statusIcon;
     QString tooltipSuffix;
@@ -244,7 +270,7 @@ void SystemTray::updateStatus(DaemonState daemon, ServiceState service)
     } else {
         switch (service) {
         case ServiceState::Idle:
-            // Idle 时保留 updateUserStatus 的文字，不覆盖
+            statusText = "状态：未连接";
             statusIcon = ":/assets/status-red.svg";
             tooltipSuffix = "未连接";
             break;
@@ -263,12 +289,15 @@ void SystemTray::updateStatus(DaemonState daemon, ServiceState service)
             statusIcon = ":/assets/status-yellow.svg";
             tooltipSuffix = "停止中";
             break;
+        case ServiceState::Unknown:
+            statusText = "状态：Unknown";
+            statusIcon = ":/assets/status-red.svg";
+            tooltipSuffix = "Unknown";
+            break;
         }
     }
 
-    if (!statusText.isEmpty()) {
-        m_statusAction->setText(statusText);
-    }
+    m_statusAction->setText(statusText);
     m_statusAction->setIcon(QIcon(statusIcon));
     m_trayIcon->setToolTip(QString("%1 - %2").arg(APP_DISPLAY_NAME, tooltipSuffix));
 
@@ -308,6 +337,11 @@ void SystemTray::updateConnectionActions(ServiceState service) const
         m_toggleConnectionAction->setIcon(QIcon(":/assets/disconnect.svg"));
         m_toggleConnectionAction->setEnabled(false);
         break;
+    case ServiceState::Unknown:
+        m_toggleConnectionAction->setText("启动连接");
+        m_toggleConnectionAction->setIcon(QIcon(":/assets/connect.svg"));
+        m_toggleConnectionAction->setEnabled(true);
+        break;
     }
 }
 
@@ -318,18 +352,18 @@ void SystemTray::updateConnectionActions(ServiceState service) const
 void SystemTray::loadSettings()
 {
     m_autoStart = m_configManager->getAutoStart();
+    m_autoConnect = m_configManager->getAutoConnect();
 
-    bool registered = isAutoStartRegistered();
-    if (m_autoStart != registered) {
+    if (const bool registered = isAutoStartRegistered(); m_autoStart != registered) {
         m_autoStart = registered;
         m_configManager->setAutoStart(m_autoStart);
         m_configManager->saveConfig();
     }
 }
 
-void SystemTray::saveSettings()
-{
+void SystemTray::saveSettings() const {
     m_configManager->setAutoStart(m_autoStart);
+    m_configManager->setAutoConnect(m_autoConnect);
     m_configManager->saveConfig();
 }
 
@@ -337,9 +371,9 @@ void SystemTray::saveSettings()
 // 用户操作响应
 // ============================================================================
 
-void SystemTray::onToggleConnection()
-{
-    if (m_connectionController->isRunning()) {
+void SystemTray::onToggleConnection() const {
+    const auto ss = m_connectionController->serviceState();
+    if (ss != ServiceState::Idle && ss != ServiceState::Unknown) {
         m_connectionController->stopConnection();
     } else {
         m_connectionController->startConnection();
@@ -367,7 +401,8 @@ void SystemTray::onSettings()
 
         updateUserStatus();
 
-        if (m_connectionController->isRunning() && newKey != oldKey) {
+        const auto ss = m_connectionController->serviceState();
+        if (ss != ServiceState::Idle && ss != ServiceState::Unknown && newKey != oldKey) {
             m_connectionController->restartAfterKeyChange();
         }
     }
@@ -393,7 +428,8 @@ void SystemTray::onClearConnectionInfo()
     m_configManager->saveConfig();
     updateUserStatus();
 
-    if (m_connectionController->isRunning()) {
+    const auto ss = m_connectionController->serviceState();
+    if (ss != ServiceState::Idle && ss != ServiceState::Unknown) {
         m_connectionController->stopConnection();
     } else {
         m_trayIcon->showMessage("EasyTier", "连接信息已清空",
@@ -424,13 +460,21 @@ void SystemTray::onAutoStart(bool checked)
     }
 }
 
+void SystemTray::onAutoConnect(bool checked)
+{
+    m_autoConnect = checked;
+    m_configManager->setAutoConnect(m_autoConnect);
+    m_configManager->saveConfig();
+}
+
 // ============================================================================
 // 退出流程 - 必须停止连接后才能退出
 // ============================================================================
 
 void SystemTray::onQuit()
 {
-    if (m_connectionController->isRunning()) {
+    const auto ss = m_connectionController->serviceState();
+    if (ss != ServiceState::Idle && ss != ServiceState::Unknown) {
         m_connectionController->requestQuit();
     } else {
         saveSettings();
