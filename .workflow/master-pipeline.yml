@@ -46,6 +46,8 @@ stages:
           - '    aqt install-qt linux desktop "$QT_VERSION" gcc_64 -O "$QT_DIR"'
           - fi
           - ''
+          - export CMAKE_PREFIX_PATH="$QT_PATH"
+          - ''
           - cmake -S . -B "$BUILD_DIR" \
           - '    -DCMAKE_BUILD_TYPE=Release \'
           - '    -DCMAKE_PREFIX_PATH="$QT_PATH"'
