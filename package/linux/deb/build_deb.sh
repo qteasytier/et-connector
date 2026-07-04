@@ -1,109 +1,153 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# 项目根目录
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+PKG_NAME="easytier-connector"
+
+echo "=== EasyTier Connector DEB 打包 ==="
+
 # 解析参数
+OUTPUT_DIR=""
 VERSION=""
-IS_PRO=false
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --output-dir)
+            OUTPUT_DIR="$(cd "$2" && pwd)"
+            shift 2
+            ;;
         --version)
             VERSION="$2"
             shift 2
             ;;
-        --pro)
-            IS_PRO=true
-            shift
-            ;;
         *)
-            echo "用法: $0 --version x.x.x [--pro]"
+            echo "用法: $0 --output-dir <Output路径> --version x.x.x"
             exit 1
             ;;
     esac
 done
 
+if [[ -z "$OUTPUT_DIR" ]]; then
+    echo "错误: --output-dir 参数为必填项"
+    echo "用法: $0 --output-dir <Output路径> --version x.x.x"
+    exit 1
+fi
+
 if [[ -z "$VERSION" ]]; then
     echo "错误: --version 参数为必填项"
-    echo "用法: $0 --version x.x.x [--pro]"
+    echo "用法: $0 --output-dir <Output路径> --version x.x.x"
     exit 1
 fi
 
-# 路径定义
-INSTALL_BIN="$PROJECT_DIR/Install/bin"
-CONTROL_FILE="$SCRIPT_DIR/DEBIAN/control"
-DESKTOP_DIR="$SCRIPT_DIR/usr"
-FAVICON="$SCRIPT_DIR/opt/etconnector/favicon.png"
-OUTPUT_DIR="$PROJECT_DIR/Install"
-
-if $IS_PRO; then
-    DEB_NAME="EasyTierProConnector_v${VERSION}_linux_amd64.deb"
-    PKG_NAME="easytier-pro-connector"
-    DESKTOP_NAME="ET Pro Connector"
-    echo "=== EasyTier Pro Connector DEB 打包 ==="
-else
-    DEB_NAME="EasyTierConnector_v${VERSION}_linux_amd64.deb"
-    PKG_NAME="easytier-connector"
-    DESKTOP_NAME="ET Connector"
-    echo "=== EasyTier Connector DEB 打包 ==="
-fi
-
-# 检查源文件是否存在
-if [[ ! -d "$INSTALL_BIN" ]]; then
-    echo "错误: Install/bin 目录不存在，请先完成构建"
-    echo "  cd build && cmake .. && cmake --build . && cmake --install ."
+if [[ ! -d "$OUTPUT_DIR" ]]; then
+    echo "错误: Output 目录不存在: $OUTPUT_DIR"
     exit 1
 fi
 
-if [[ ! -f "$CONTROL_FILE" ]]; then
-    echo "错误: control 文件不存在: $CONTROL_FILE"
-    exit 1
-fi
-
+echo "Output 目录: $OUTPUT_DIR"
 echo "版本号: $VERSION"
-echo "输出文件: $DEB_NAME"
 
-# 创建临时目录
+# 验证 Output 目录包含必要产物
+EXE_PATH="$OUTPUT_DIR/EasyTierConnector"
+DAEMON_PATH="$OUTPUT_DIR/qtet-connector-daemon"
+
+if [[ ! -f "$EXE_PATH" ]]; then
+    echo "错误: Output 目录中未找到 EasyTierConnector"
+    exit 1
+fi
+
+if [[ ! -f "$DAEMON_PATH" ]]; then
+    echo "错误: Output 目录中未找到 qtet-connector-daemon"
+    exit 1
+fi
+
+# 项目资源文件
+CONTROL_FILE="$SCRIPT_DIR/DEBIAN/control"
+FAVICON="$PROJECT_DIR/favicon/favicon-open.png"
+SERVICE_FILE="$PROJECT_DIR/assets/easytier-connector.service"
+DESKTOP_FILE="$PROJECT_DIR/assets/etconnector.desktop"
+
+for f in "$CONTROL_FILE" "$FAVICON" "$SERVICE_FILE" "$DESKTOP_FILE"; do
+    if [[ ! -f "$f" ]]; then
+        echo "错误: 资源文件不存在: $f"
+        exit 1
+    fi
+done
+
+DEB_NAME="EasyTierConnector_v${VERSION}_linux_amd64.deb"
+PKG_OUTPUT_DIR="$OUTPUT_DIR/package"
+
+echo "输出包: $PKG_OUTPUT_DIR/$DEB_NAME"
+
+# 创建临时目录构建 deb
 TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
 
-# 构建 DEB 目录结构
 mkdir -p "$TMP_DIR/DEBIAN"
 mkdir -p "$TMP_DIR/opt/etconnector"
+mkdir -p "$TMP_DIR/usr/bin"
+mkdir -p "$TMP_DIR/etc/systemd/system"
 
-# 复制并替换 control 版本号 + 包名
-cp "$CONTROL_FILE" "$TMP_DIR/DEBIAN/control"
-sed -i "s/^Version:.*/Version: $VERSION/" "$TMP_DIR/DEBIAN/control"
-sed -i "s/^Package:.*/Package: $PKG_NAME/" "$TMP_DIR/DEBIAN/control"
-# 确保 control 文件以换行符结尾（避免 dpkg-deb 解析 Description 字段出错）
+# 复制主程序和守护进程
+cp "$EXE_PATH" "$TMP_DIR/opt/etconnector/"
+cp "$DAEMON_PATH" "$TMP_DIR/opt/etconnector/"
+
+# 复制动态库
+for lib in "$OUTPUT_DIR"/*.so; do
+    [ -f "$lib" ] && cp "$lib" "$TMP_DIR/opt/etconnector/"
+done
+
+# 复制图标
+cp "$FAVICON" "$TMP_DIR/opt/etconnector/"
+
+# 复制 systemd 服务
+cp "$SERVICE_FILE" "$TMP_DIR/etc/systemd/system/"
+
+# 复制桌面文件
+mkdir -p "$TMP_DIR/usr/share/applications"
+cp "$DESKTOP_FILE" "$TMP_DIR/usr/share/applications/"
+
+# 创建 /usr/bin 软链接
+ln -sf "/opt/etconnector/EasyTierConnector" "$TMP_DIR/usr/bin/EasyTierConnector"
+
+# 复制并生成 control 文件
+sed "s/^Version:.*/Version: $VERSION/" "$CONTROL_FILE" > "$TMP_DIR/DEBIAN/control"
 sed -i -e '$a\' "$TMP_DIR/DEBIAN/control"
 
-# 复制 Install/bin 内容到 opt/etconnector
-cp -r "$INSTALL_BIN"/* "$TMP_DIR/opt/etconnector/"
+# 生成 postinst (安装后脚本)
+cat > "$TMP_DIR/DEBIAN/postinst" <<'POSTINSTEOF'
+#!/bin/bash
+set -e
 
-# 复制 favicon.png
-if [[ -f "$FAVICON" ]]; then
-    cp "$FAVICON" "$TMP_DIR/opt/etconnector/"
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable easytier-connector.service 2>/dev/null || true
+systemctl start easytier-connector.service 2>/dev/null || true
+POSTINSTEOF
+chmod 755 "$TMP_DIR/DEBIAN/postinst"
+
+# 生成 postrm (卸载脚本)
+cat > "$TMP_DIR/DEBIAN/postrm" <<'POSTRMEOF'
+#!/bin/bash
+set -e
+
+if [[ "$1" == "remove" || "$1" == "purge" ]]; then
+    systemctl stop easytier-connector.service 2>/dev/null || true
+    systemctl disable easytier-connector.service 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
 fi
+POSTRMEOF
+chmod 755 "$TMP_DIR/DEBIAN/postrm"
 
-# 复制桌面入口等文件，并替换 Name
-if [[ -d "$DESKTOP_DIR" ]]; then
-    cp -r "$DESKTOP_DIR" "$TMP_DIR/"
-    # 替换桌面文件中的 Name
-    find "$TMP_DIR/usr" -name "*.desktop" -exec sed -i "s/^Name=.*/Name=$DESKTOP_NAME/" {} \;
-fi
-
-# 设置目录权限
+# 设置权限
 find "$TMP_DIR" -type d -exec chmod 755 {} \;
-find "$TMP_DIR" -type f -exec chmod 644 {} \;
-# 确保可执行文件有执行权限
-find "$TMP_DIR/opt/etconnector" -type f -name "EasyTierConnector" -exec chmod 755 {} \;
-find "$TMP_DIR/opt/etconnector" -type f -name "easytier-*" -exec chmod 755 {} \;
+find "$TMP_DIR" -type f ! -path "$TMP_DIR/DEBIAN/*" -exec chmod 644 {} \;
+find "$TMP_DIR/opt/etconnector" -type f \( -name "EasyTierConnector" -o -name "easytier-*" -o -name "qtet-*" \) -exec chmod 755 {} \;
 
 # 打包
+mkdir -p "$PKG_OUTPUT_DIR"
 echo "正在打包..."
-dpkg-deb --build "$TMP_DIR" "$OUTPUT_DIR/$DEB_NAME"
+dpkg-deb --build "$TMP_DIR" "$PKG_OUTPUT_DIR/$DEB_NAME"
 
-echo "完成: $OUTPUT_DIR/$DEB_NAME"
+echo ""
+echo "完成！deb 包已生成: $PKG_OUTPUT_DIR/$DEB_NAME"

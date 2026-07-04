@@ -93,7 +93,7 @@ package() {
         "${pkgdir}/etc/systemd/system/easytier-connector.service"
 
     # 桌面文件
-    install -Dm644 "package/linux/deb/usr/share/applications/etconnector.desktop" \
+    install -Dm644 "assets/etconnector.desktop" \
         "${pkgdir}/usr/share/applications/etconnector.desktop"
 
     # 创建 /usr/bin 软链接

@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=ET Connector
+Name=EasyTier Connector
 Comment=EasyTier Web Connector
 Exec=/opt/etconnector/EasyTierConnector
 Icon=/opt/etconnector/favicon-open.png
