@@ -9,7 +9,7 @@ endif()
 project(EasyTierConnector LANGUAGES CXX)
 
 # 项目版本
-set(PROJECT_VERSION "1.0.0")
+set(PROJECT_VERSION "1.1.0")
 set(ET_VERSION "2.6.4")
 
 # 默认安装目录为项目根目录的Install文件夹，可由 -DCMAKE_INSTALL_PREFIX=... 覆盖
