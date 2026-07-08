@@ -37,7 +37,7 @@ enum class ServiceState {
     Idle,           ///< 配置服务器未启动，可发起连接
     Connecting,     ///< 正在连接配置服务器，等待心跳确认（最多 30s）
     Connected,      ///< 配置服务器已成功连接，业务正常运行
-    Stopping,       ///< 正在停止配置服务器，等待后端响应（最多 10s）
+    Stopping,       ///< 正在停止配置服务器，等待后端响应（最多 30s）
     Unknown         ///< 未知状态，用于与配置服务器通信失败时的默认值
 };
 
@@ -124,6 +124,7 @@ private slots:
     void onHeartbeat();
     void onStartTimeout();
     void onStopTimeout();
+    void onReconnectWaitTimeout();
 
 private:
     // ========================================================================
@@ -152,7 +153,6 @@ private:
     void doStartConnection();
     void doStopConnection();
     void processQueuedActions();
-    void tryReconnect();
 
     void showProgress(const QString &text);
     void closeProgress() const;
@@ -170,17 +170,15 @@ private:
     QString m_lastError;
     PendingAction m_pendingAction = PendingAction::None;
 
-    int m_reconnectCount = 0;
-    static constexpr int MAX_RECONNECT = 3;                    /// > 重连次数上限
     static constexpr int HEARTBEAT_INTERVAL_MS = 2000;         /// > 心跳间隔（毫秒）
     static constexpr int HEARTBEAT_INTERVAL_FAST_MS = 1000;    /// > 快速心跳间隔（毫秒）
-    static constexpr int START_TIMEOUT_MS = 30000;             /// > 启动超时时间（毫秒）
-    static constexpr int STOP_TIMEOUT_MS = 10000;              /// > 停止超时时间（毫秒）
+    static constexpr int OPERATION_TIMEOUT_MS = 30000;         /// > 统一超时时间（启动/停止/等待重连，毫秒）
     static constexpr int RESTART_DELAY_MS = 500;               /// > 重启延迟（毫秒）
 
-    QTimer *m_heartbeatTimer;   /// > 心跳定时器
-    QTimer *m_startTimeout;     /// > 启动超时定时器
-    QTimer *m_stopTimeout;      /// > 停止超时定时器
+    QTimer *m_heartbeatTimer;        /// > 心跳定时器
+    QTimer *m_startTimeout;          /// > 启动超时定时器
+    QTimer *m_stopTimeout;           /// > 停止超时定时器
+    QTimer *m_reconnectWaitTimer;    /// > 断线后等待后端自动重连的超时计时器
 
     QPointer<QProgressDialog> m_progressDialog;  /// > 进度对话框
    };

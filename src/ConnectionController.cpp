@@ -51,6 +51,11 @@ ConnectionController::ConnectionController(ConfigManager *configManager, QObject
     m_stopTimeout->setSingleShot(true);
     connect(m_stopTimeout, &QTimer::timeout, this, &ConnectionController::onStopTimeout);
 
+    m_reconnectWaitTimer = new QTimer(this);
+    m_reconnectWaitTimer->setSingleShot(true);
+    connect(m_reconnectWaitTimer, &QTimer::timeout,
+            this, &ConnectionController::onReconnectWaitTimeout);
+
     m_ipcClient->connectToDaemon();
 
     std::clog << "ConnectionController: 初始化完成" << std::endl;
@@ -61,6 +66,7 @@ ConnectionController::~ConnectionController()
     m_heartbeatTimer->stop();
     m_startTimeout->stop();
     m_stopTimeout->stop();
+    m_reconnectWaitTimer->stop();
     closeProgress();
     m_ipcClient->disconnectFromDaemon();
     std::clog << "ConnectionController: 析构完成" << std::endl;
@@ -87,8 +93,8 @@ void ConnectionController::setDaemonDisconnected()
     // 后端断开 → 所有进行中的操作都被强制终止
     m_startTimeout->stop();
     m_stopTimeout->stop();
+    m_reconnectWaitTimer->stop();
     closeProgress();
-    m_reconnectCount = 0;
 
     // Service 强制回到 Unknown
     setServiceState(ServiceState::Unknown);
@@ -110,18 +116,19 @@ void ConnectionController::setServiceState(ServiceState state)
         m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL_MS);
         m_startTimeout->stop();
         m_stopTimeout->stop();
-        m_reconnectCount = 0;
+        m_reconnectWaitTimer->stop();
         closeProgress();
         break;
     case ServiceState::Connecting:
         m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL_FAST_MS);
+        m_reconnectWaitTimer->stop();
         // startTimeout 由 doStartConnection 启动
         break;
     case ServiceState::Connected:
         m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL_MS);
         m_startTimeout->stop();
         m_stopTimeout->stop();
-        m_reconnectCount = 0;
+        m_reconnectWaitTimer->stop();
         closeProgress();
         break;
     case ServiceState::Stopping:
@@ -171,7 +178,7 @@ void ConnectionController::doStartConnection()
     const QString hostname = QSysInfo::machineHostName();
     m_ipcClient->startConfigServerClient(key, hostname, hostname,
                                          m_configManager->getSecureMode());
-    m_startTimeout->start(START_TIMEOUT_MS);
+    m_startTimeout->start(OPERATION_TIMEOUT_MS);
 }
 
 // ============================================================================
@@ -198,7 +205,7 @@ void ConnectionController::doStopConnection()
     showProgress("正在断开配置服务器...");
     setServiceState(ServiceState::Stopping);
 
-    m_stopTimeout->start(STOP_TIMEOUT_MS);
+    m_stopTimeout->start(OPERATION_TIMEOUT_MS);
     m_ipcClient->stopConfigServerClient();
 }
 
@@ -227,26 +234,6 @@ void ConnectionController::restartAfterKeyChange()
             stopConnection();
         }
     }
-}
-
-// ============================================================================
-// 自动重连
-// ============================================================================
-
-void ConnectionController::tryReconnect()
-{
-    if (m_reconnectCount >= MAX_RECONNECT) {
-        m_lastError = "连接丢失，自动重连次数已达上限";
-        setServiceState(ServiceState::Idle);
-        emit connectionFailed(m_lastError);
-        return;
-    }
-
-    m_reconnectCount++;
-    std::clog << "ConnectionController: 自动重连 " << m_reconnectCount
-              << "/" << MAX_RECONNECT << std::endl;
-
-    doStartConnection();
 }
 
 // ============================================================================
@@ -367,10 +354,19 @@ void ConnectionController::onStateQueried(bool isConnected)
         setServiceState(ServiceState::Connected);
         emit connected();
     }
-    // 后端报告已断开，但前端认为 Connected → 触发自动重连
-    else if (!isConnected && m_serviceState == ServiceState::Connected) {
-        std::clog << "ConnectionController: 心跳检测 - 配置服务器已断开，尝试重连" << std::endl;
-        tryReconnect();
+    // 后端报告已断开，但前端认为 Connected → 等待后端自动重连
+    else if (m_serviceState == ServiceState::Connected) {
+        if (isConnected) {
+            if (m_reconnectWaitTimer->isActive()) {
+                m_reconnectWaitTimer->stop();
+                std::clog << "ConnectionController: 心跳检测 - 配置服务器已恢复连接" << std::endl;
+            }
+        } else {
+            if (!m_reconnectWaitTimer->isActive()) {
+                std::clog << "ConnectionController: 心跳检测 - 配置服务器已断开，等待后端自动重连..." << std::endl;
+                m_reconnectWaitTimer->start(OPERATION_TIMEOUT_MS);
+            }
+        }
     }
 }
 
@@ -431,7 +427,7 @@ void ConnectionController::onStartTimeout()
     }
 
     setServiceState(ServiceState::Stopping);
-    m_stopTimeout->start(STOP_TIMEOUT_MS);
+    m_stopTimeout->start(OPERATION_TIMEOUT_MS);
 }
 
 void ConnectionController::onStopTimeout()
@@ -446,6 +442,22 @@ void ConnectionController::onStopTimeout()
     }
 
     processQueuedActions();
+}
+
+void ConnectionController::onReconnectWaitTimeout()
+{
+    std::clog << "ConnectionController: 等待重连超时，进入停止流程" << std::endl;
+    closeProgress();
+
+    m_lastError = "连接已断开，等待重连超时";
+
+    if (m_ipcClient->isSocketConnected()) {
+        m_ipcClient->stopConfigServerClient();
+    }
+
+    setServiceState(ServiceState::Stopping);
+    m_stopTimeout->start(OPERATION_TIMEOUT_MS);
+    emit connectionFailed(m_lastError);
 }
 
 // ============================================================================
